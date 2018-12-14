@@ -14,7 +14,7 @@ int main()
 {
     //вывод видео
     Mat frame;
-    VideoCapture capture("../bottom__10.avi");
+    VideoCapture capture("/home/vladushked/Documents/code/hydronautics/videos/bottom__10.avi");
     namedWindow("video", WINDOW_AUTOSIZE);
 
     for (;;) {
