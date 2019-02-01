@@ -1,4 +1,5 @@
 #include <iostream>
+#include <string>
 #include "opencv2/core.hpp"
 #include "opencv2/imgproc.hpp"
 #include "opencv2/videoio.hpp"
@@ -7,36 +8,46 @@
 using namespace std;
 using namespace cv;
 
-void imgProc(Mat img);
-void findLines(Mat img);
+float angle = 0;
+int quartcircle = 0;
 
 const float delta_theta = 0.35; // костанта для тетта
 const float delta_rho = 20; // костанта для ро
+
+void imgProc(Mat img);
+float findVertical(Mat img);
+void angleVar(float cur, float* prev, int* semi);
 
 int main()
 {
     //вывод видео
     Mat frame;
+    float angle;
+    string angle_text;
+
     VideoCapture capture("/home/vladushked/Documents/code/hydronautics/videos/bottom__10.avi");
     namedWindow("video", WINDOW_AUTOSIZE);
 
     for (;;) {
+
         capture.read(frame); //read frame
-
         cvtColor(frame,frame,COLOR_BGR2GRAY); // frame color to grayscale
-
         if (frame.empty()){ //check if frame empty
             cerr << "Empty frame!";
-
         }
-
         imgProc(frame); //image processing
-        findLines(frame);
+        //vertical
+        //angle_text = std::to_string(findVertical(frame) * 180 / CV_PI);
+        //putText(frame,angle_text,Point(10,110),CV_FONT_NORMAL,1,255);
+        //global angle
+        angleVar(findVertical(frame), &angle, &quartcircle);
+        angle_text = std::to_string(angle * 180 / CV_PI + quartcircle * 90);
+        putText(frame,std::to_string(angle * 180 / CV_PI),Point(10,30),CV_FONT_NORMAL,1,255);
+        putText(frame,std::to_string(quartcircle*45),Point(10,70),CV_FONT_NORMAL,1,255);
+        putText(frame,angle_text,Point(10,110),CV_FONT_NORMAL,1,255);
 
         imshow("video",frame);
-
         waitKey(0);
-
     }
     return 0;
 }
@@ -48,63 +59,54 @@ void imgProc(Mat img) //обработка изображения
     Canny( img, img, 200, 600, 3);
 }
 
-void findLines(Mat img)
+float findVertical(Mat img)
 {
-    bool fl_th_out = 0;
+    vector<float> temp_theta;
+    vector<Vec2f> lines;
+    float average_sum = 0, average = 0, vertical = 0, l_corn_theta, r_corn_theta;
+    int average_counter = 0;
 
-    vector<float> temp_lines_rho, temp_lines_theta;
-    vector<Vec2f> lines, horizontal_lines, vertical_lines;
+    HoughLines(img, lines, 1, CV_PI/180, 100);
 
-    HoughLines(img, lines, 1, CV_PI/180, 100); // преобразование Хафа. нахождение линий
-
-    cout << "Before sort:" << endl;
-
-    float l_corn_theta = lines[0][1] - delta_theta; //дельты ро и тета
-    float r_corn_theta = lines[0][1] + delta_theta;
-    float l_corn_rho = lines[0][0] - delta_rho;
-    float r_corn_rho = lines[0][0] + delta_rho;
-
-
-
-    if (l_corn_theta < 0) l_corn_theta += 180; // проверка на выход дельты тетта из границ интервала тетта(0..180 град)
-    else if (r_corn_theta > 180){
-        fl_th_out = 1; // true если вышло
-        r_corn_theta -= 180;
+    for (size_t i = 0; i < lines.size(); i++){ // находим линию не близкую к границам
+        l_corn_theta = lines[i][1] - delta_theta; //дельты ро и тета
+        r_corn_theta = lines[i][1] + delta_theta;
+        //проверка на выход за границы
+        if ((l_corn_theta < 0) | (r_corn_theta > CV_PI)) continue;
+        else break;
     }
 
-    for (size_t i = 0; i < lines.size(); i++)
-    {
-        cout << lines[i][0] << " " << lines[i][1] << endl; // вывод исходного массива
-        float rho = lines[i][0], theta = lines[i][1]; // текущие значения
-
-        if (!fl_th_out){ // если не вышло за границы
-            if ((theta > l_corn_theta) and (theta < r_corn_theta)){
-                temp_lines_rho.push_back(rho);
-                temp_lines_theta.push_back(theta);
-            }
-            else {
-
-            }
+    for (size_t i = 0; i < lines.size(); i++){
+        float theta = lines[i][1]; // текущие значения
+        if ((theta > l_corn_theta) and (theta < r_corn_theta)){
+            temp_theta.push_back(theta);
+            average_sum += theta;
+            average_counter++;
         }
-        else if (((theta > l_corn_theta) and (theta < CV_PI)) or ((theta > 0) and (theta < r_corn_theta))){ // если дельта вышла за границы 0..180 град
-
-        }
-
-        /*
-        float rho = lines[i][0], theta = lines[i][1];
-        cv::Point pt1, pt2;
-        double a = cos(theta), b = sin(theta);
-        double x0 = a*rho, y0 = b*rho;
-        pt1.x = cvRound(x0 + 2000*(-b));
-        pt1.y = cvRound(y0 + 2000*(a));
-        pt2.x = cvRound(x0 - 2000*(-b));
-        pt2.y = cvRound(y0 - 2000*(a));
-        line( img, pt1, pt2, cv::Scalar(0,0,255), 3, cv::LINE_AA);
-        */
     }
-    cout << endl;
+    average = average_sum/average_counter; //average
+    if ((average > 0.785) and (average < 2.356)) vertical = average - CV_PI/2; // проверка на вертикальность
+    else if (average > 2.356) vertical = average - CV_PI;
+    else vertical = average;
 
-    for (size_t i = 0; i < temp_lines_rho.size(); i++)
-        cout << temp_lines_rho[i] << " " << temp_lines_theta[i] << endl; // вывод temp массива
+    return vertical;
+}
 
+void angleVar(float cur, float* prev, int* quart)
+{
+    if (((cur > 0) & (*prev > 0)) | ((cur < 0) & (*prev < 0))){
+        *prev = cur;
+    }
+    else{
+        float delta = cur - *prev;
+        if (fabs(delta) < 0.35) *prev = cur;
+        else if (delta > 0){
+            *prev = cur;
+            *quart -= 1;
+        }
+        else{
+            *prev = cur;
+            *quart += 1;
+        }
+    }
 }
