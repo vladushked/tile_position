@@ -11,6 +11,7 @@ const float delta_rho = 20; // костанта для ро
 
 std::vector<float> lines_vertical, lines_horizontal;
 int vertical_counter, horizontal_counter; //счетчики линий
+float vertical = 0;
 float angle = 0;
 int quartcircle = 0;
 
@@ -52,8 +53,6 @@ void imgPrep(cv::Mat &img) //обработка изображения
 
 void finder(cv::Mat &img)
 {
-    float vertical = 0;
-
     std::vector<float> temp_theta, temp_vertical, temp_horizontal;
     std::vector<cv::Vec2f> lines;
     float average_sum = 0, average, l_corn_theta = 0, r_corn_theta = 0;
@@ -167,7 +166,7 @@ void processing(cv::Mat &img)
 {
     imgPrep(img); //image processing
     finder(img);
-    //angleVar(vertical, &angle, &quartcircle);
+    angleVar(vertical, &angle, &quartcircle);
 
 
     std::string angle_text;
